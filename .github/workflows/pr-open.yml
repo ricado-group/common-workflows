@@ -1,0 +1,19 @@
+name: 'Pull Request - Open'
+
+on:
+  workflow_call:
+
+jobs:
+  add-comment:
+    name: 'Add Comment'
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: mshick/add-pr-comment@v2
+        with:
+          message: |
+            Please apply a Versioning Label of `version:major`, `version:minor` or `version:patch` to have this PR Released after Merging.
+
+            If you do not wish to Bump the Project Version and Release, then apply the `version:none` Label.

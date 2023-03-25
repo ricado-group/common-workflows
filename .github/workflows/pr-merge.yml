@@ -44,12 +44,15 @@ jobs:
       - name: "Determine New Version"
         id: newVersion
         run: |
-          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:major') }}" == "true" ]] then
-            echo "version=${{ steps.nextVersions.outputs.major }}" >> $GITHUB_OUTPUT
-          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:minor') }}" == "true" ]] then
-            echo "version=${{ steps.nextVersions.outputs.minor }}" >> $GITHUB_OUTPUT
-          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:patch') }}" == "true" ]] then
-            echo "version=${{ steps.nextVersions.outputs.patch }}" >> $GITHUB_OUTPUT
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:major') }}" == "true" ]];
+          then
+            echo "version=${{ steps.nextVersions.outputs.major }}" >> $GITHUB_OUTPUT;
+          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:minor') }}" == "true" ]];
+          then
+            echo "version=${{ steps.nextVersions.outputs.minor }}" >> $GITHUB_OUTPUT;
+          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:patch') }}" == "true" ]];
+          then
+            echo "version=${{ steps.nextVersions.outputs.patch }}" >> $GITHUB_OUTPUT;
           fi
       
       - name: "Update NPM Version"

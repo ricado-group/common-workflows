@@ -1,0 +1,53 @@
+name: 'Pull Request - Merge'
+
+on:
+  workflow_call:
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+
+jobs:
+  create-tag:
+    name: 'Create Tag'
+    if: ${{ github.event.pull_request.merged == true && (contains(github.event.pull_request.labels.*.name, 'version:major') || contains(github.event.pull_request.labels.*.name, 'version:minor') || contains(github.event.pull_request.labels.*.name, 'version:patch')) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      
+      - if: ${{ contains(github.event.pull_request.labels.*.name, 'version:major') }}
+        uses: anothrNick/github-tag-action@1.61.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: false
+          DEFAULT_BUMP: 'major'
+          MAJOR_STRING_TOKEN: '#neverused##'
+          MINOR_STRING_TOKEN: '#neverused##'
+          PATCH_STRING_TOKEN: '#neverused##'
+          NONE_STRING_TOKEN: '#neverused##'
+          BRANCH_HISTORY: 'last'
+      
+      - if: ${{ contains(github.event.pull_request.labels.*.name, 'version:minor') }}
+        uses: anothrNick/github-tag-action@1.61.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: false
+          DEFAULT_BUMP: 'minor'
+          MAJOR_STRING_TOKEN: '#neverused##'
+          MINOR_STRING_TOKEN: '#neverused##'
+          PATCH_STRING_TOKEN: '#neverused##'
+          NONE_STRING_TOKEN: '#neverused##'
+          BRANCH_HISTORY: 'last'
+      
+      - if: ${{ contains(github.event.pull_request.labels.*.name, 'version:patch') }}
+        uses: anothrNick/github-tag-action@1.61.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: false
+          DEFAULT_BUMP: 'patch'
+          MAJOR_STRING_TOKEN: '#neverused##'
+          MINOR_STRING_TOKEN: '#neverused##'
+          PATCH_STRING_TOKEN: '#neverused##'
+          NONE_STRING_TOKEN: '#neverused##'
+          BRANCH_HISTORY: 'last'

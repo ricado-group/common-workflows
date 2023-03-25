@@ -82,7 +82,7 @@ jobs:
             **/*.csproj
       
       - name: "Add, Commit and Push Changes"
-        if: ${{ steps.changedFiles.outputs.files_changed == true }}
+        if: steps.changedFiles.outputs.files_changed == 'true'
         uses: EndBug/add-and-commit@v9
         with:
           default_author: github_actions

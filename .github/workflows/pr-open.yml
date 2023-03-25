@@ -11,7 +11,18 @@ jobs:
     permissions:
       pull-requests: write
     steps:
-      - uses: mshick/add-pr-comment@v2
+      - name: "Check Labels not Applied"
+        id: checkLabels
+        uses: mheap/github-action-required-labels@v3
+        with:
+          mode: exactly
+          count: 0
+          labels: "version:none, version:patch, version:minor, version:major"
+          exit_type: success
+      
+      - name: "Add a PR Comment"
+        if: ${{ steps.checkLabels.outputs.status == 'success' }}
+        uses: mshick/add-pr-comment@v2
         with:
           message: |
             Please apply a Versioning Label of `version:major`, `version:minor` or `version:patch` to have this PR Released after Merging.

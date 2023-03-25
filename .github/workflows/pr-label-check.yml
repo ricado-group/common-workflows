@@ -16,4 +16,4 @@ jobs:
           count: 1
           labels: "version:none, version:patch, version:minor, version:major"
           add_comment: true
-          message: "This PR is blocked from merging due to a missing `version:...` Label"
+          message: "This PR is blocked from merging due to a missing `version:` Label or multiple `version:` Labels being applied"

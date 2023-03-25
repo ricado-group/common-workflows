@@ -1,2 +1,2 @@
-# common-workflows
-A Collection of Common Workflows that can be reused
+# Common GitHub Actions Workflows
+A Collection of Common GitHub Actions Workflows that can be reused

@@ -86,7 +86,7 @@ jobs:
         uses: EndBug/add-and-commit@v9
         with:
           default_author: github_actions
-          new_branch: master
+          new_branch: ${{ github.event.pull_request.base.ref }}
           message: 'Bump Version to ${{ steps.newVersion.outputs.version }} for Release'
       
       - name: "Tag and Push"

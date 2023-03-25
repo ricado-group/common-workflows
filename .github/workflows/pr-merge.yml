@@ -44,11 +44,11 @@ jobs:
       - name: "Determine New Version"
         id: newVersion
         run: |
-          if [[ "${{ github.event.pull_request.labels.*.name }}" =~ "version:major" ]] then
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:major') }}" == "true" ]] then
             echo "version=${{ steps.nextVersions.outputs.major }}" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event.pull_request.labels.*.name }}" =~ "version:minor" ]] then
+          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:minor') }}" == "true" ]] then
             echo "version=${{ steps.nextVersions.outputs.minor }}" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event.pull_request.labels.*.name }}" =~ "version:patch" ]] then
+          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:patch') }}" == "true" ]] then
             echo "version=${{ steps.nextVersions.outputs.patch }}" >> $GITHUB_OUTPUT
           fi
       

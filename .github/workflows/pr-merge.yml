@@ -27,6 +27,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           token: ${{ secrets.token }}
+          fetch-depth: 0
       
       - name: "Get Previous Tag"
         id: previousTag

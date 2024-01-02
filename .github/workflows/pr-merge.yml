@@ -74,7 +74,7 @@ jobs:
       
       - name: "Verify Changed Files"
         id: changedFiles
-        uses: tj-actions/verify-changed-files@v14
+        uses: tj-actions/verify-changed-files@v17
         with:
           files: |
             **/*.json

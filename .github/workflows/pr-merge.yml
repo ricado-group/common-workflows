@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       projectType:
-        description: "One or more Project Types to Bump the Version for: npm, dotnet"
+        description: "One or more Project Types to Bump the Version for: npm, dotnet, react-native"
         required: false
         type: string
     secrets:
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "Checkout Merge Branch"
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           token: ${{ secrets.token }}
@@ -31,7 +31,7 @@ jobs:
       
       - name: "Get Previous Tag"
         id: previousTag
-        uses: WyriHaximus/github-action-get-previous-tag@v1
+        uses: WyriHaximus/github-action-get-previous-tag@v2
         with:
           fallback: 1.0.0
       
@@ -72,18 +72,42 @@ jobs:
             find . -name "*.csproj" -exec sed -i "s/<Version>${{ steps.previousTag.outputs.tag }}<\/Version>/<Version>${{ steps.newVersion.outputs.version }}<\/Version>/g" {} +
           fi
       
+      - name: "Update React Native Version"
+        if: ${{ contains(inputs.projectType, 'react-native') }}
+        run: |
+          VERSION_NAME="${{ steps.newVersion.outputs.version }}"
+          MAJOR="${VERSION_NAME%%.*}"
+          REST="${VERSION_NAME#*.}"
+          MINOR="${REST%%.*}"
+          PATCH="${REST##*.}"
+          PATCH="${PATCH%%[^0-9]*}"
+          VERSION_CODE=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
+
+          npm config set allow-same-version true
+          npm config set commit-hooks false
+          npm config set git-tag-version false
+          npm --no-git-tag-version version ${VERSION_NAME}
+
+          find . -type f -name "build.gradle" -exec sed -i -E "s|^([[:space:]]*versionName([[:space:]]*=[[:space:]]*|[[:space:]]+)).*$|\1\"${VERSION_NAME}\"|" {} +
+          find . -type f -name "build.gradle" -exec sed -i -E "s|^([[:space:]]*versionCode([[:space:]]*=[[:space:]]*|[[:space:]]+)).*$|\1${VERSION_CODE}|" {} +
+
+          find . -type f -name "project.pbxproj" -exec sed -i -E "s|^([[:space:]]*MARKETING_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)$|\1${VERSION_NAME}\2|" {} +
+          find . -type f -name "project.pbxproj" -exec sed -i -E "s|^([[:space:]]*CURRENT_PROJECT_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)$|\1${VERSION_CODE}\2|" {} +
+      
       - name: "Verify Changed Files"
         id: changedFiles
-        uses: tj-actions/verify-changed-files@v14
+        uses: tj-actions/verify-changed-files@v20
         with:
           files: |
             **/*.json
             **/*.cs
             **/*.csproj
+            **/build.gradle
+            **/project.pbxproj
       
       - name: "Add, Commit and Push Changes"
         if: steps.changedFiles.outputs.files_changed == 'true'
-        uses: EndBug/add-and-commit@v9
+        uses: EndBug/add-and-commit@v10
         with:
           default_author: github_actions
           new_branch: ${{ github.event.pull_request.base.ref }}

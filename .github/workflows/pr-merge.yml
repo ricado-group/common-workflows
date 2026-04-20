@@ -88,11 +88,12 @@ jobs:
           npm config set git-tag-version false
           npm --no-git-tag-version version ${VERSION_NAME}
 
-          find . -type f -name "build.gradle" -exec sed -i -E "s|^([[:space:]]*versionName([[:space:]]*=[[:space:]]*|[[:space:]]+)).*$|\1\"${VERSION_NAME}\"|" {} +
-          find . -type f -name "build.gradle" -exec sed -i -E "s|^([[:space:]]*versionCode([[:space:]]*=[[:space:]]*|[[:space:]]+)).*$|\1${VERSION_CODE}|" {} +
+          find . -type f -name "build.gradle" -exec sed -i -E "s#^([[:space:]]*versionName([[:space:]]*=[[:space:]]*|[[:space:]]+)).*\$#\\1\"${VERSION_NAME}\"#" {} +
+          find . -type f -name "build.gradle" -exec sed -i -E "s#^([[:space:]]*versionCode([[:space:]]*=[[:space:]]*|[[:space:]]+)).*\$#\\1${VERSION_CODE}#" {} +
 
-          find . -type f -name "project.pbxproj" -exec sed -i -E "s|^([[:space:]]*MARKETING_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)$|\1${VERSION_NAME}\2|" {} +
-          find . -type f -name "project.pbxproj" -exec sed -i -E "s|^([[:space:]]*CURRENT_PROJECT_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)$|\1${VERSION_CODE}\2|" {} +
+          find . -type f -name "project.pbxproj" -exec sed -i -E "s#^([[:space:]]*MARKETING_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)\$#\\1${VERSION_NAME}\\2#" {} +
+          find . -type f -name "project.pbxproj" -exec sed -i -E "s#^([[:space:]]*CURRENT_PROJECT_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)\$#\\1${VERSION_CODE}\\2#" {} +
+
       
       - name: "Verify Changed Files"
         id: changedFiles

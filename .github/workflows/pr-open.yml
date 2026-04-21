@@ -22,7 +22,7 @@ jobs:
       
       - name: "Add a PR Comment"
         if: ${{ steps.checkLabels.outputs.status == 'success' }}
-        uses: mshick/add-pr-comment@v2
+        uses: mshick/add-pr-comment@v3
         with:
           message: |
             Please apply a Versioning Label of `version:major`, `version:minor` or `version:patch` to have this PR Released after Merging.

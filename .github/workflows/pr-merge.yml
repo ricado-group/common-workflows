@@ -134,7 +134,7 @@ jobs:
         if: steps.changedFiles.outputs.files_changed == 'true'
         run: |
           git add -A
-          git commit -m "Bump Version to ${{ steps.newVersion.outputs.version }} for Release"
+          git commit -m "${{ steps.newVersion.outputs.version }}"
           git push origin HEAD:${{ github.event.pull_request.base.ref }}
 
       - name: Tag and Push

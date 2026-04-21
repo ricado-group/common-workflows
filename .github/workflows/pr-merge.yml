@@ -7,9 +7,13 @@ on:
         description: "One or more Project Types to Bump the Version for: npm, dotnet, react-native"
         required: false
         type: string
+      gra-app-client-id:
+        description: "GitHub Release Automation App Client ID"
+        required: true
+        type: string
     secrets:
-      token:
-        description: "A Personal Access Token (PAT) to be used for Git Credentials"
+      gra-app-private-key:
+        description: "GitHub Release Automation App Private Key"
         required: true
 
 defaults:
@@ -21,58 +25,79 @@ jobs:
     name: 'Bump Version and Tag'
     if: ${{ github.event.pull_request.merged == true && (contains(github.event.pull_request.labels.*.name, 'version:major') || contains(github.event.pull_request.labels.*.name, 'version:minor') || contains(github.event.pull_request.labels.*.name, 'version:patch')) }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: "Checkout Merge Branch"
+      - name: Create GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ inputs.gra-app-client-id }}
+          private-key: ${{ secrets.gra-app-private-key }}
+          permission-contents: write
+
+      - name: Checkout Merge Branch
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
-          token: ${{ secrets.token }}
+          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
-      
-      - name: "Get Previous Tag"
+          persist-credentials: false
+
+      - name: Get GitHub App User ID
+        id: app-user
+        run: |
+          echo "user_id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Configure Git
+        run: |
+          git config user.name '${{ steps.app-token.outputs.app-slug }}[bot]'
+          git config user.email '${{ steps.app-user.outputs.user_id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com'
+          git remote set-url origin "https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/${{ github.repository }}.git"
+
+      - name: Get Previous Tag
         id: previousTag
         uses: WyriHaximus/github-action-get-previous-tag@v2
         with:
           fallback: 1.0.0
-      
-      - name: "Get Next Versions"
+
+      - name: Get Next Versions
         id: nextVersions
         uses: WyriHaximus/github-action-next-semvers@v1
         with:
           version: ${{ steps.previousTag.outputs.tag }}
-      
-      - name: "Determine New Version"
+
+      - name: Determine New Version
         id: newVersion
         run: |
-          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:major') }}" == "true" ]];
-          then
-            echo "version=${{ steps.nextVersions.outputs.major }}" >> $GITHUB_OUTPUT;
-          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:minor') }}" == "true" ]];
-          then
-            echo "version=${{ steps.nextVersions.outputs.minor }}" >> $GITHUB_OUTPUT;
-          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:patch') }}" == "true" ]];
-          then
-            echo "version=${{ steps.nextVersions.outputs.patch }}" >> $GITHUB_OUTPUT;
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:major') }}" == "true" ]]; then
+            echo "version=${{ steps.nextVersions.outputs.major }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:minor') }}" == "true" ]]; then
+            echo "version=${{ steps.nextVersions.outputs.minor }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ contains(github.event.pull_request.labels.*.name, 'version:patch') }}" == "true" ]]; then
+            echo "version=${{ steps.nextVersions.outputs.patch }}" >> "$GITHUB_OUTPUT"
           fi
-      
-      - name: "Update NPM Version"
+
+      - name: Update NPM Version
         if: ${{ contains(inputs.projectType, 'npm') }}
         run: |
           npm config set allow-same-version true
           npm config set commit-hooks false
           npm config set git-tag-version false
           npm --no-git-tag-version version ${{ steps.newVersion.outputs.version }}
-      
-      - name: "Update DotNet Version"
+
+      - name: Update DotNet Version
         if: ${{ contains(inputs.projectType, 'dotnet') }}
         run: |
-          if [[ -d "./Properties" ]] && [[ -f "./Properties/AssemblyInfo.cs" ]] then
+          if [[ -d "./Properties" ]] && [[ -f "./Properties/AssemblyInfo.cs" ]]; then
             sed -i "s/${{ steps.previousTag.outputs.tag }}/${{ steps.newVersion.outputs.version }}/g" ./Properties/AssemblyInfo.cs
           else
             find . -name "*.csproj" -exec sed -i "s/<Version>${{ steps.previousTag.outputs.tag }}<\/Version>/<Version>${{ steps.newVersion.outputs.version }}<\/Version>/g" {} +
           fi
-      
-      - name: "Update React Native Version"
+
+      - name: Update React Native Version
         if: ${{ contains(inputs.projectType, 'react-native') }}
         run: |
           VERSION_NAME="${{ steps.newVersion.outputs.version }}"
@@ -86,7 +111,7 @@ jobs:
           npm config set allow-same-version true
           npm config set commit-hooks false
           npm config set git-tag-version false
-          npm --no-git-tag-version version ${VERSION_NAME}
+          npm --no-git-tag-version version "${VERSION_NAME}"
 
           find . -type f -name "build.gradle" -exec sed -i -E "s#^([[:space:]]*versionName([[:space:]]*=[[:space:]]*|[[:space:]]+)).*\$#\\1\"${VERSION_NAME}\"#" {} +
           find . -type f -name "build.gradle" -exec sed -i -E "s#^([[:space:]]*versionCode([[:space:]]*=[[:space:]]*|[[:space:]]+)).*\$#\\1${VERSION_CODE}#" {} +
@@ -94,8 +119,7 @@ jobs:
           find . -type f -name "project.pbxproj" -exec sed -i -E "s#^([[:space:]]*MARKETING_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)\$#\\1${VERSION_NAME}\\2#" {} +
           find . -type f -name "project.pbxproj" -exec sed -i -E "s#^([[:space:]]*CURRENT_PROJECT_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)\$#\\1${VERSION_CODE}\\2#" {} +
 
-      
-      - name: "Verify Changed Files"
+      - name: Verify Changed Files
         id: changedFiles
         uses: tj-actions/verify-changed-files@v20
         with:
@@ -105,16 +129,15 @@ jobs:
             **/*.csproj
             **/build.gradle
             **/project.pbxproj
-      
-      - name: "Add, Commit and Push Changes"
+
+      - name: Add, Commit and Push Changes
         if: steps.changedFiles.outputs.files_changed == 'true'
-        uses: EndBug/add-and-commit@v10
-        with:
-          default_author: github_actions
-          new_branch: ${{ github.event.pull_request.base.ref }}
-          message: 'Bump Version to ${{ steps.newVersion.outputs.version }} for Release'
-      
-      - name: "Tag and Push"
         run: |
-          git tag ${{ steps.newVersion.outputs.version }}
-          git push origin ${{ steps.newVersion.outputs.version }}
+          git add -A
+          git commit -m "Bump Version to ${{ steps.newVersion.outputs.version }} for Release"
+          git push origin HEAD:${{ github.event.pull_request.base.ref }}
+
+      - name: Tag and Push
+        run: |
+          git tag "${{ steps.newVersion.outputs.version }}"
+          git push origin "${{ steps.newVersion.outputs.version }}"

@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       projectType:
-        description: "One or more Project Types to Bump the Version for: npm, dotnet, react-native"
+        description: "One or more Project Types to Bump the Version for: npm, dotnet, react-native, ionic-capacitor, react-native-expo"
         required: false
         type: string
       gra-app-client-id:
@@ -118,6 +118,51 @@ jobs:
 
           find . -type f -name "project.pbxproj" -exec sed -i -E "s#^([[:space:]]*MARKETING_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)\$#\\1${VERSION_NAME}\\2#" {} +
           find . -type f -name "project.pbxproj" -exec sed -i -E "s#^([[:space:]]*CURRENT_PROJECT_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)\$#\\1${VERSION_CODE}\\2#" {} +
+      
+      - name: Update Ionic / Capacitor Version
+        if: ${{ contains(inputs.projectType, 'ionic-capacitor') }}
+        run: |
+          VERSION_NAME="${{ steps.newVersion.outputs.version }}"
+          MAJOR="${VERSION_NAME%%.*}"
+          REST="${VERSION_NAME#*.}"
+          MINOR="${REST%%.*}"
+          PATCH="${REST##*.}"
+          PATCH="${PATCH%%[^0-9]*}"
+          VERSION_CODE=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
+
+          npm config set allow-same-version true
+          npm config set commit-hooks false
+          npm config set git-tag-version false
+          npm --no-git-tag-version version "${VERSION_NAME}"
+
+          find . -type f -name "build.gradle" -exec sed -i -E "s#^([[:space:]]*versionName([[:space:]]*=[[:space:]]*|[[:space:]]+)).*\$#\\1\"${VERSION_NAME}\"#" {} +
+          find . -type f -name "build.gradle" -exec sed -i -E "s#^([[:space:]]*versionCode([[:space:]]*=[[:space:]]*|[[:space:]]+)).*\$#\\1${VERSION_CODE}#" {} +
+
+          find . -type f -name "project.pbxproj" -exec sed -i -E "s#^([[:space:]]*MARKETING_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)\$#\\1${VERSION_NAME}\\2#" {} +
+          find . -type f -name "project.pbxproj" -exec sed -i -E "s#^([[:space:]]*CURRENT_PROJECT_VERSION[[:space:]]*=[[:space:]]*)[^;]*([[:space:]]*;.*)\$#\\1${VERSION_CODE}\\2#" {} +
+      
+      - name: Update React Native Expo Version
+        if: ${{ contains(inputs.projectType, 'react-native-expo') }}
+        run: |
+          VERSION_NAME="${{ steps.newVersion.outputs.version }}"
+          MAJOR="${VERSION_NAME%%.*}"
+          REST="${VERSION_NAME#*.}"
+          MINOR="${REST%%.*}"
+          PATCH="${REST##*.}"
+          PATCH="${PATCH%%[^0-9]*}"
+          VERSION_CODE=$((MAJOR * 1000000 + MINOR * 1000 + PATCH))
+
+          if [ -f app.json ]; then
+            sed -i -E "s#^([[:space:]]*\"version\"[[:space:]]*:[[:space:]]*)\"[^\"]*\"([[:space:]]*,?)\$#\\1\"${VERSION_NAME}\"\\2#" app.json
+            sed -i -E "s#^([[:space:]]*\"buildNumber\"[[:space:]]*:[[:space:]]*)(\"[^\"]*\"|[0-9]+)([[:space:]]*,?)\$#\\1\"${VERSION_CODE}\"\\3#" app.json
+            sed -i -E "s#^([[:space:]]*\"versionCode\"[[:space:]]*:[[:space:]]*)(\"[0-9]+\"|[0-9]+)([[:space:]]*,?)\$#\\1${VERSION_CODE}\\3#" app.json
+          fi
+
+          if [ -f app.config.ts ]; then
+            sed -i -E "s#^([[:space:]]*['\"]?version['\"]?[[:space:]]*:[[:space:]]*)[^,/}]+([[:space:]]*,?[[:space:]]*(//.*)?)\$#\\1'${VERSION_NAME}'\\2#" app.config.ts
+            sed -i -E "s#^([[:space:]]*['\"]?buildNumber['\"]?[[:space:]]*:[[:space:]]*)[^,/}]+([[:space:]]*,?[[:space:]]*(//.*)?)\$#\\1'${VERSION_CODE}'\\2#" app.config.ts
+            sed -i -E "s#^([[:space:]]*['\"]?versionCode['\"]?[[:space:]]*:[[:space:]]*)[^,/}]+([[:space:]]*,?[[:space:]]*(//.*)?)\$#\\1${VERSION_CODE}\\2#" app.config.ts
+          fi
 
       - name: Verify Changed Files
         id: changedFiles

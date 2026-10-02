@@ -166,14 +166,16 @@ jobs:
 
       - name: Verify Changed Files
         id: changedFiles
-        uses: tj-actions/verify-changed-files@v20
-        with:
-          files: |
-            **/*.json
-            **/*.cs
-            **/*.csproj
-            **/build.gradle
-            **/project.pbxproj
+        env:
+          PROJECT_TYPE: ${{ inputs.projectType }}
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "files_changed=true" >> "$GITHUB_OUTPUT"
+            git status --short
+          else
+            echo "files_changed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No files were changed by the Version Bump for Project Type(s) '${PROJECT_TYPE//$'\n'/ }' - the Tag will point at the Merge Commit"
+          fi
 
       - name: Add, Commit and Push Changes
         if: steps.changedFiles.outputs.files_changed == 'true'

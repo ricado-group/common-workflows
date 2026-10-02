@@ -37,7 +37,7 @@ jobs:
           permission-contents: write
 
       - name: Checkout Merge Branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           token: ${{ steps.app-token.outputs.token }}

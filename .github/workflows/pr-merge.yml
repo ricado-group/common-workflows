@@ -72,7 +72,7 @@ jobs:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
-          git fetch --tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          git fetch --force --tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
 
           if ! git merge-base --is-ancestor "${MERGE_SHA}" "origin/${BASE_REF}"; then
             echo "::error::Merge Commit ${MERGE_SHA} is no longer on '${BASE_REF}' - not Bumping the Version or Tagging a Branch that does not contain this Pull Request"
@@ -82,11 +82,21 @@ jobs:
           git checkout --quiet --detach "origin/${BASE_REF}"
           echo "Bumping the Version on '${BASE_REF}' at $(git rev-parse --short HEAD) (Merge Commit ${MERGE_SHA:0:7})"
 
+      # The newest Tag by creation date, as before, but tie-broken by Version rather than by name: Bump Jobs that change no
+      # files tag the Base Branch Tip directly, so successive Releases can share one Commit (and creation date), and a name
+      # sort would put 1.0.9 above 1.0.10 and make the next Job try to create a Tag that already exists.
       - name: Get Previous Tag
         id: previousTag
-        uses: WyriHaximus/github-action-get-previous-tag@v2
-        with:
-          fallback: 1.0.0
+        run: |
+          TAG="$(git for-each-ref --sort=-version:refname --sort=-creatordate --count 1 --format='%(refname:short)' 'refs/tags/*')"
+
+          if [[ -z "${TAG}" ]]; then
+            echo "No previous Tag found - falling back to 1.0.0"
+            TAG="1.0.0"
+          fi
+
+          echo "Previous Tag: ${TAG}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Get Next Versions
         id: nextVersions
@@ -225,6 +235,13 @@ jobs:
 
             echo "::warning::Push to '${BASE_REF}' was rejected (attempt ${attempt} of 3) - rebasing the Version Bump onto the latest '${BASE_REF}' and retrying"
             git fetch origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+
+            # Only the Version Bump Commit may be replayed: if the Commit it was built on is no longer on the Base Branch, the
+            # Branch was rewritten and a rebase would restore the removed Commits (possibly this Pull Request) and tag them.
+            if ! git merge-base --is-ancestor HEAD~1 "origin/${BASE_REF}"; then
+              echo "::error::'${BASE_REF}' was rewritten while this Job was running - re-run this Job to Bump the Version and Tag the latest '${BASE_REF}'"
+              exit 1
+            fi
 
             if ! git rebase "origin/${BASE_REF}"; then
               git rebase --abort

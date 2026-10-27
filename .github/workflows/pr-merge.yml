@@ -25,6 +25,13 @@ jobs:
     name: 'Bump Version and Tag'
     if: ${{ github.event.pull_request.merged == true && (contains(github.event.pull_request.labels.*.name, 'version:major') || contains(github.event.pull_request.labels.*.name, 'version:minor') || contains(github.event.pull_request.labels.*.name, 'version:patch')) }}
     runs-on: ubuntu-latest
+    # Bump Jobs for the same Base Branch run one at a time (Concurrency Groups are per Repository) so each Merge computes
+    # its Version from the previous Job's Tag and pushes onto its Commit. queue: max keeps every waiting Job instead of
+    # cancelling all but the newest, so a burst of Merges still produces one Version and Tag per Pull Request.
+    concurrency:
+      group: pr-merge-${{ github.event.pull_request.base.ref }}
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
     steps:
@@ -56,6 +63,24 @@ jobs:
           git config user.name '${{ steps.app-token.outputs.app-slug }}[bot]'
           git config user.email '${{ steps.app-user.outputs.user_id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com'
           git remote set-url origin "https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/${{ github.repository }}.git"
+
+      # The Base Branch may have moved on since this Pull Request was merged (another Merge or Push), so bump the Version on
+      # its current Tip rather than on the Merge Commit. The fresh Tags also make the previous Tag lookup see Tags pushed by
+      # Bump Jobs that ran while this one was queued.
+      - name: Sync with Base Branch
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          git fetch --tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+
+          if ! git merge-base --is-ancestor "${MERGE_SHA}" "origin/${BASE_REF}"; then
+            echo "::error::Merge Commit ${MERGE_SHA} is no longer on '${BASE_REF}' - not Bumping the Version or Tagging a Branch that does not contain this Pull Request"
+            exit 1
+          fi
+
+          git checkout --quiet --detach "origin/${BASE_REF}"
+          echo "Bumping the Version on '${BASE_REF}' at $(git rev-parse --short HEAD) (Merge Commit ${MERGE_SHA:0:7})"
 
       - name: Get Previous Tag
         id: previousTag
@@ -168,21 +193,48 @@ jobs:
         id: changedFiles
         env:
           PROJECT_TYPE: ${{ inputs.projectType }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           if [ -n "$(git status --porcelain)" ]; then
             echo "files_changed=true" >> "$GITHUB_OUTPUT"
             git status --short
           else
             echo "files_changed=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::No files were changed by the Version Bump for Project Type(s) '${PROJECT_TYPE//$'\n'/ }' - the Tag will point at the Merge Commit"
+            echo "::warning::No files were changed by the Version Bump for Project Type(s) '${PROJECT_TYPE//$'\n'/ }' - the Tag will point at the current '${BASE_REF}' Commit"
           fi
 
       - name: Add, Commit and Push Changes
         if: steps.changedFiles.outputs.files_changed == 'true'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          VERSION: ${{ steps.newVersion.outputs.version }}
         run: |
           git add -A
-          git commit -m "${{ steps.newVersion.outputs.version }}"
-          git push origin HEAD:${{ github.event.pull_request.base.ref }}
+          git commit -m "${VERSION}"
+
+          # A Push can still land on the Base Branch between the Sync and this Push (a direct Push or a version:none Merge),
+          # so rebase the single Version Bump Commit onto the latest Base Branch and retry a bounded number of times.
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${BASE_REF}"; then
+              exit 0
+            fi
+
+            if [[ "${attempt}" -eq 3 ]]; then
+              break
+            fi
+
+            echo "::warning::Push to '${BASE_REF}' was rejected (attempt ${attempt} of 3) - rebasing the Version Bump onto the latest '${BASE_REF}' and retrying"
+            git fetch origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+
+            if ! git rebase "origin/${BASE_REF}"; then
+              git rebase --abort
+              echo "::error::The Version Bump conflicts with new Commits on '${BASE_REF}' - re-run this Job to Bump the Version and Tag the latest '${BASE_REF}'"
+              exit 1
+            fi
+          done
+
+          echo "::error::Could not push the Version Bump to '${BASE_REF}' after 3 attempts"
+          exit 1
 
       - name: Tag and Push
         run: |
